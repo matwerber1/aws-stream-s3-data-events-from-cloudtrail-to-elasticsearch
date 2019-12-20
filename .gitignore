@@ -1,4 +1,6 @@
 mydeploy.sh
+packaged.yaml
+.aws-sam/build
 
 # Created by https://www.gitignore.io/api/osx,node,linux,windows
 

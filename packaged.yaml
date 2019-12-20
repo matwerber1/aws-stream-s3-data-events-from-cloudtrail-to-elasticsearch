@@ -1,41 +1,99 @@
 AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 Description: 'Stream S3 data access logs from CloudTrail  to CloudWatch Logs to Lambda
   to ElasticSearch.
 
   '
 Globals:
   Function:
-    Timeout: 3
+    Timeout: 5
+Parameters:
+  EsIndex:
+    Type: String
+    Default: cloudwatch-logs
+  EsDocType:
+    Type: String
+    Default: s3-log
+  EsEndpoint:
+    Type: String
+  EsDomainName:
+    Type: String
 Resources:
+  PublishToElasticSearchFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: s3://werberm-sandbox/5ffda06cab4aff31c4569eaa49307ef2
+      Handler: app.handler
+      Runtime: python3.7
+      Environment:
+        Variables:
+          ES_ENDPOINT:
+            Ref: EsEndpoint
+          ES_REGION:
+            Fn::Sub: ${AWS::Region}
+          ES_INDEX:
+            Ref: EsIndex
+          ES_DOC_TYPE:
+            Ref: EsDocType
+      Events:
+        S3CloudTrailLogsEvent:
+          Type: CloudWatchLogs
+          Properties:
+            FilterPattern: ''
+            LogGroupName:
+              Ref: LogGroup
+      Policies:
+      - AWSLambdaVPCAccessExecutionRole
+      - ElasticsearchHttpPostPolicy:
+          DomainName:
+            Ref: EsDomainName
+      VpcConfig:
+        SecurityGroupIds:
+        - sg-00e88c6dc027cc7ce
+        SubnetIds:
+        - subnet-014bb42f
+        - subnet-d3c33e8f
+  S3Bucket:
+    Type: AWS::S3::Bucket
   BucketPolicy:
+    Type: AWS::S3::BucketPolicy
     Properties:
       Bucket:
         Ref: S3Bucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
-        - Action: s3:GetBucketAcl
+        - Sid: AWSCloudTrailAclCheck
           Effect: Allow
           Principal:
             Service: cloudtrail.amazonaws.com
+          Action: s3:GetBucketAcl
           Resource:
             Fn::Sub: arn:aws:s3:::${S3Bucket}
-          Sid: AWSCloudTrailAclCheck
-        - Action: s3:PutObject
+        - Sid: AWSCloudTrailWrite
+          Effect: Allow
+          Principal:
+            Service: cloudtrail.amazonaws.com
+          Action: s3:PutObject
+          Resource:
+            Fn::Sub: arn:aws:s3:::${S3Bucket}/AWSLogs/${AWS::AccountId}/*
           Condition:
             StringEquals:
               s3:x-amz-acl: bucket-owner-full-control
-          Effect: Allow
-          Principal:
-            Service: cloudtrail.amazonaws.com
-          Resource:
-            Fn::Sub: arn:aws:s3:::${S3Bucket}/AWSLogs/${AWS::AccountId}/*
-          Sid: AWSCloudTrailWrite
-        Version: '2012-10-17'
-    Type: AWS::S3::BucketPolicy
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: 7
   CloudTrail:
+    Type: AWS::CloudTrail::Trail
     DependsOn:
     - BucketPolicy
     Properties:
+      S3BucketName:
+        Ref: S3Bucket
+      IncludeGlobalServiceEvents: false
+      IsLogging: true
+      IsMultiRegionTrail: false
       CloudWatchLogsLogGroupArn:
         Fn::GetAtt:
         - LogGroup
@@ -50,50 +108,61 @@ Resources:
           Values:
           - 'arn:aws:s3:::'
         IncludeManagementEvents: false
-      IncludeGlobalServiceEvents: false
-      IsLogging: true
-      IsMultiRegionTrail: false
-      S3BucketName:
-        Ref: S3Bucket
-    Type: AWS::CloudTrail::Trail
   CloudTrailRole:
+    Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
+        Version: '2012-10-17'
         Statement:
-        - Action:
-          - sts:AssumeRole
-          Effect: Allow
+        - Effect: Allow
           Principal:
             Service:
             - cloudtrail.amazonaws.com
-        Version: '2012-10-17'
+          Action:
+          - sts:AssumeRole
       Path: /
-    Type: AWS::IAM::Role
-  LogGroup:
+  CloudTrailRolePolicy:
+    Type: AWS::IAM::Policy
     Properties:
-      RetentionInDays: 7
-    Type: AWS::Logs::LogGroup
-  RolePolicies:
-    Properties:
+      PolicyName: cloudtrailLogsWritePolicy
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
-        - Action:
+        - Effect: Allow
+          Action:
           - logs:CreateLogStream
           - logs:PutLogEvents
-          Effect: Allow
           Resource:
             Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroup}:log-stream:*
-        Version: '2012-10-17'
-      PolicyName: cloudtrailLogsWritePolicy
       Roles:
       - Ref: CloudTrailRole
-    Type: AWS::IAM::Policy
-  S3Bucket:
-    Type: AWS::S3::Bucket
-  S3LogStreamerToElasticSearch:
+  CloudWatchRole:
+    Type: AWS::IAM::Role
     Properties:
-      CodeUri: s3://werberm-sandbox/40166478af44291560e724f89a1b3779
-      Handler: app.lambdaHandler
-      Runtime: nodejs10.x
-    Type: AWS::Serverless::Function
-Transform: AWS::Serverless-2016-10-31
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - logs.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+  CloudWatchRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: lambda
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action:
+          - lambda:*
+          Resource: '*'
+        - Effect: Allow
+          Action:
+          - iam:PassRole
+          Resource: '*'
+      Roles:
+      - Ref: CloudWatchRole
