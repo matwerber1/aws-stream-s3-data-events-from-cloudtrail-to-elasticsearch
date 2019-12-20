@@ -22,7 +22,7 @@ Resources:
   PublishToElasticSearchFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: s3://werberm-sandbox/5ffda06cab4aff31c4569eaa49307ef2
+      CodeUri: s3://werberm-sandbox/4e4172bcf47465353fcf6337beebf54e
       Handler: app.handler
       Runtime: python3.7
       Environment:
