@@ -6,7 +6,8 @@ Description: >
   
 Globals:
   Function:
-    Timeout: 5
+    # If you're seeing function errors, it might be due to timeout. Consider raising this? 
+    Timeout: 60
 
 Parameters:
   EsIndex:

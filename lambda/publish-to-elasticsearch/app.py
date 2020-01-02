@@ -41,7 +41,6 @@ def handler(event, ctx) -> None:
     print('Processing records...')
     for record in logEvents:
         id = record['id']
-        print('Sending record {} to ElasticSearch...'.format(id))
         document = json.loads(record['message'])
         r = requests.put(url + id, auth=awsauth, json=document, headers=headers)
         if (r.status_code > 299):
@@ -49,7 +48,9 @@ def handler(event, ctx) -> None:
             errors = 0
         else:
             count += 1
-    print('{} records posted ({} failed) to ElasticSearch.'.format(count, errors))
+    print('{} records posted to Elasticsearch.'.format(count))
+    if (errors > 0):
+        print('{} failed records not posted to Elasticsearch.'.format(count))
 
 # Based on: 
 # https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-aws-integrations.html#es-aws-integrations-dynamodb-es
