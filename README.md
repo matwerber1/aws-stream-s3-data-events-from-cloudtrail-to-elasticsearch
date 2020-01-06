@@ -31,7 +31,7 @@ buckets and/or object filters.
 
 1. Git clone this repository
 
-    `git clone...`
+    `git clone https://github.com/matwerber1/aws-stream-s3-data-events-from-cloudtrail-to-elasticsearch.git`
 
 2. Open `deploy.sh` and edit the values below: 
 
