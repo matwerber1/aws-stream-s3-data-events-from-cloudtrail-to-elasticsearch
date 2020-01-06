@@ -41,3 +41,9 @@ buckets and/or object filters.
     ES_DOMAIN_NAME=<DOMAIN_NAME_OF_YOUR_ES_CLUSTER>
     ES_ENDPOINT=<HTTPS_ENDPOINT_OF_YOUR_ES_CLUSTER>
     ```
+
+3. Run the deployment script: 
+
+    ```sh
+    ./deploy.sh
+    ```
