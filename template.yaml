@@ -26,9 +26,24 @@ Parameters:
   EsDomainName:
     Type: String
 
+  CreateORIGINALResources:
+    Description: "Create ORIGINAL Resources?"
+    Default: "n"
+    Type: String
+    AllowedValues: 
+      - "n"
+      - "y"
+    ConstraintDescription: must specify n or y
+
+
+Conditions:
+
+  CreateORIGINALResources: !Equals [!Ref CreateORIGINALResources, "y"]
+
 Resources:
   
   PublishToElasticSearchFunction:
+    Condition: CreateORIGINALResources
     Type: AWS::Serverless::Function # More info about Function Resource:
     Properties:
       CodeUri: lambda/publish-to-elasticsearch
@@ -40,6 +55,7 @@ Resources:
           ES_REGION: !Sub "${AWS::Region}"
           ES_INDEX: !Ref EsIndex
           ES_DOC_TYPE: !Ref EsDocType
+          parent_stack_name: !Sub '${AWS::StackName}'
       Events:
         S3CloudTrailLogsEvent: 
           Type: CloudWatchLogs
@@ -180,3 +196,259 @@ Resources:
             Resource: "*"         
       Roles:
         - !Ref CloudWatchRole
+
+
+
+# >----------------------------------------------------------------------------------------<
+
+
+
+
+
+
+
+
+  logmydataFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      Role: !GetAtt logmydataFunctionRole.Arn
+      CodeUri: logmydata/
+      Handler: logmydata.lambda_handler
+      Runtime: python3.7
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          cloud_id: '-'
+          http_auth_username: '-'
+          http_auth_password: '-'
+          index_name: '-'
+          AWS_XRAY_TRACING_NAME: 'logmydataFunction'
+      Events:
+        S3CloudTrailLogsEvent: 
+          Type: CloudWatchLogs
+          Properties: 
+            FilterPattern: ""
+            LogGroupName: !Ref LogGroup
+
+
+
+  logmydataFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: ['sts:AssumeRole']
+            Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+
+
+  logmydataFunctionRolePolicy: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: !Sub "${AWS::StackName}-logmydataFunctionRolePolicy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+              - "s3:*"
+              - "ssm:*"
+              - "kms:*"
+              - "logs:*"
+            Resource: "*"
+      Roles: 
+        - Ref: "logmydataFunctionRole"
+  
+
+  ParameterStoreEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: 'alias/ParameterStoreEncryptionKey'
+      TargetKeyId: !Ref ParameterStoreEncryptionKey
+
+  ParameterStoreEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'Encryption key for secret config values for S3 Access log Lambda function'
+      Enabled: True
+      EnableKeyRotation: False
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: 'key-default-1'
+        Statement:
+          -
+            Sid: 'Allow administration of the key & encryption of new values'
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:Create*'
+              - 'kms:Encrypt'
+              - 'kms:Describe*'
+              - 'kms:Enable*'
+              - 'kms:List*'
+              - 'kms:Put*'
+              - 'kms:Update*'
+              - 'kms:Revoke*'
+              - 'kms:Disable*'
+              - 'kms:Get*'
+              - 'kms:Delete*'
+              - 'kms:ScheduleKeyDeletion'
+              - 'kms:CancelKeyDeletion'
+            Resource: '*'
+          -
+            Sid: 'Allow use of the key'
+            Effect: Allow
+            Principal:
+              AWS: !GetAtt logmydataFunctionRole.Arn
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      
+
+
+
+
+  
+  cleanupBucketOnDelete:
+    DependsOn: cleanupBucketOnDeleteFunction
+    Type: Custom::cleanupbucket
+    Properties:
+      ServiceToken: 
+        Fn::GetAtt: 
+          - "cleanupBucketOnDeleteFunction"
+          - "Arn"
+      BucketName: !Sub '${S3Bucket.Arn}'
+    # BucketName: !Ref ArtifactStoreBucketName
+
+  
+  cleanupBucketOnDeleteFunction:
+    DependsOn: S3Bucket
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    # Type: "AWS::Lambda::Function"
+    Properties:
+      Role: !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
+      CodeUri: cleanupBucketOnDelete/
+      Handler: cleanupBucketOnDelete.lambda_handler
+      Runtime: python3.7
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          s3_bucket_name: !Ref S3Bucket
+      Timeout: 60
+      Description: cleanup Bucket on Delete Lambda Lambda function.
+
+
+  cleanupBucketOnDeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: ['sts:AssumeRole']
+            Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+
+
+  cleanupBucketOnDeleteLambdaRolePolicy: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: !Sub "${AWS::StackName}-cleanupBucketOnDeleteLambdaRolePolicy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+              - "s3:*"
+              - "logs:*"
+            Resource: "*"
+          - Effect: "Deny"
+            Action: 
+              - "s3:DeleteBucket"
+            Resource: "*"
+      Roles: 
+          - Ref: "cleanupBucketOnDeleteLambdaRole"
+
+
+  customResources:
+    DependsOn: customResourcesLambdaRolePolicy
+    Type: Custom::customresources
+    Properties:
+      ServiceToken: 
+        Fn::GetAtt: 
+          - "customResourcesFunction"
+          - "Arn"
+      parent_stack_name: !Sub '${AWS::StackName}'
+
+  
+  customResourcesFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt customResourcesLambdaRole.Arn
+      CodeUri: customresources/
+      Handler: customresources.lambda_handler
+      Runtime: python3.7
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          parent_stack_name: !Sub '${AWS::StackName}'
+          ParameterStoreEncryptionKey: !Sub '${ParameterStoreEncryptionKey}'
+      Timeout: 60
+      Description: Create and Delete custom resources Lambda function.
+
+
+  customResourcesLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: ['sts:AssumeRole']
+            Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+
+
+  customResourcesLambdaRolePolicy: 
+    DependsOn: ParameterStoreEncryptionKey
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: !Sub "${AWS::StackName}-customResourcesLambdaRolePolicy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+              - "s3:*"
+              - "ssm:*"
+              - "logs:*"
+              - "kms:*"
+            Resource: "*"
+      Roles: 
+        - Ref: "customResourcesLambdaRole"
+
+
+
+  
+
+
+Outputs:
+
+  logmydataFunction:
+    Description: "logmydataFunction Lambda Function ARN"
+    Value: !GetAtt logmydataFunction.Arn
+
+  logmydataFunctionIamRole:
+    Description: "Implicit IAM Role created for logmydataFunction function"
+    Value: !GetAtt logmydataFunctionRole.Arn
+
+  logmydataFunctionIamRole:
+    Description: "Implicit IAM Role created for logmydataFunction function"
+    Value: !GetAtt logmydataFunctionRole.Arn
+
+
