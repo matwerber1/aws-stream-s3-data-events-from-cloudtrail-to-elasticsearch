@@ -65,5 +65,5 @@ buckets and/or object filters.
 	Import the provided dashboard (TBD): 
 	
     ```sh 
-	kibana.json
+	export.ndjson
 	```
