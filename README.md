@@ -42,6 +42,7 @@ signficant amount of log data, which has both cost and performance consideration
 You may want to initially adjust the demo to only apply to certain lower-volume
 buckets and/or object filters. 
 
+
 ## Deployment 
 
 1. Git clone this repository
