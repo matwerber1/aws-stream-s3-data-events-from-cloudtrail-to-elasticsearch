@@ -68,3 +68,14 @@ buckets and/or object filters.
     ```sh 
 	export.ndjson
 	```
+
+
+## Dashboard Screenshots
+
+![MacDown logo](dashboard1.png)
+
+#### TPS - Transactions Per Second
+![MacDown logo](dashboard2.png)
+
+
+ 
