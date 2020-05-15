@@ -39,6 +39,23 @@ s3 = boto3.client('s3')
 
 
 
+# awsauth = AWS4Auth(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, 'es', session_token=AWS_SESSION_TOKEN)
+host = os.environ.get('ES_ENDPOINT')
+index = os.environ.get('ES_INDEX')
+region = os.environ.get('ES_REGION')
+
+service = 'es'
+credentials = boto3.Session().get_credentials()
+awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
+HOSTS=[{'host': host, 'port': 443}]
+elastic_client = Elasticsearch(
+    hosts=HOSTS,
+    http_auth=awsauth,
+    use_ssl=True,
+    verify_certs=True,
+    connection_class=RequestsHttpConnection
+)
+
 
 
 
@@ -57,46 +74,13 @@ def decode_event(event: dict) -> dict:
 def lambda_handler(event, context):
     print("Received event: " + json.dumps(event, indent=2))
 
-    cloud_id_var = os.getenv('cloud_id')
-    http_auth_username = os.getenv('http_auth_username')
-    http_auth_password = os.getenv('http_auth_password')
-    index_name = os.getenv('index_name')
-    parent_stack_name = os.getenv('parent_stack_name')
-
-
-
-    try:
-        # Get all parameters for this app is not set using environment variables
-
-        param_details = client.get_parameter(Name='/' + parent_stack_name + '/cloud_id',WithDecryption=True)
-        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and cloud_id_var is "-":
-            for param in param_details.get('Parameter'):
-                cloud_id_var = param.get('Value')
-
-        param_details = client.get_parameter(Name='/' + parent_stack_name + '/http_auth_username',WithDecryption=True)
-        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and http_auth_username is "-":
-            for param in param_details.get('Parameter'):
-                http_auth_username = param.get('Value')
-
-        param_details = client.get_parameter(Name='/' + parent_stack_name + '/http_auth_password',WithDecryption=True)
-        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and http_auth_password is "-":
-            for param in param_details.get('Parameter'):
-                http_auth_password = param.get('Value')
-
-        param_details = client.get_parameter(Name='/' + parent_stack_name + '/index_name',WithDecryption=True)
-        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0 and index_name is "-":
-            for param in param_details.get('Parameter'):
-                index_name = param.get('Value')
-
-    except:
-        print("Encountered an error loading credentials from SSM.")
-        traceback.print_exc()
 
 
 ##################################################################################################
     #Now put that data in ElasticCloud! 
 ##################################################################################################
-    es = Elasticsearch(cloud_id=cloud_id_var, http_auth=(http_auth_username,http_auth_password))
+    es = elastic_client
+    # es = Elasticsearch(cloud_id=cloud_id_var, http_auth=(http_auth_username,http_auth_password))
     es.info()
 
     # create an index in elasticsearch, ignore status code 400 (index already exists)

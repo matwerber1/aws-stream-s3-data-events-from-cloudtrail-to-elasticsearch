@@ -13,7 +13,7 @@ credentials = boto3.Session().get_credentials()
 awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
 
 host = os.environ.get('ES_ENDPOINT')
-index = os.environ.get('ES_INDEX')
+index = os.environ.get('index_name')
 type = os.environ.get('ES_DOC_TYPE')
 url = host + '/' + index + '/' + type + '/'
 
@@ -29,7 +29,7 @@ def decode_record(data: dict) -> dict:
 def decode_event(event: dict) -> dict:
     return decode_record(event['awslogs'])
 
-def handler(event, ctx) -> None:
+def lambda_handler(event, ctx) -> None:
     event = decode_event(event)
     print(json.dumps(event))
 
