@@ -123,6 +123,7 @@ Resources:
                           - "logs:*"
                           - "xray:*"
                           - "es:*"
+                          - "ssm:*"
                     Resource: "*"
           Roles: 
               - Ref: "s3dataeventstoelasticcloudrole"
