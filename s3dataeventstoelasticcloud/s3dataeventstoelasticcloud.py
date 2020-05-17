@@ -62,9 +62,7 @@ def decode_event(event: dict) -> dict:
 # AWS Lambda hander invoked first
 ##################################################################################################
 def lambda_handler(event, context):
-    print("Received event: " + json.dumps(event, indent=2))
-
-
+    # print("Received event: " + json.dumps(event, indent=2))
 
     ######################################################################
     # Get all parameters containing credentials for this app
@@ -124,13 +122,13 @@ def lambda_handler(event, context):
     
     # Based on: 
     # https://docs.aws.amazon.com/elasticsearch-service/latest/developerguide/es-aws-integrations.html#es-aws-integrations-dynamodb-es
-    print(event)
-    print("\n\n event=" + json.dumps(event))
+    # print(event)
+    # print("\n\n event=" + json.dumps(event))
     event = decode_event(event)
-    print(json.dumps(event))
+    # print(json.dumps(event))
 
     logEvents = event['logEvents']
-    print("Log events:\n{}".format(logEvents))
+    # print("Log events:\n{}".format(logEvents))
 
     count = 0
     errors = 0
@@ -139,7 +137,7 @@ def lambda_handler(event, context):
         id = record['id']
         document = json.loads(record['message'])
         res = es.index(index=index_name, body=document)
-        print(res)
+        # print(res)
         print("\n\n result=" + res['result'])
         # r = requests.put(url + id, auth=awsauth, json=document, headers=headers)
         # if (res['status_code'] > 299):
