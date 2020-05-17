@@ -34,7 +34,7 @@ def lambda_handler(event, ctx) -> None:
     print(json.dumps(event))
 
     logEvents = event['logEvents']
-    print("Log events:\n{}".format(logEvents))
+    # print("Log events:\n{}".format(logEvents))
 
     count = 0
     errors = 0
