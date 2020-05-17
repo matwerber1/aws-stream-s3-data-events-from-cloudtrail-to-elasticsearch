@@ -37,7 +37,7 @@ Resources:
       Handler: s3dataeventstoawscloud.lambda_handler
       Runtime: python3.7
       Tracing: Active
-      Timeout: 10
+      Timeout: 30
       Environment: 
         Variables: 
           ES_ENDPOINT: !Ref EsEndpoint
@@ -88,7 +88,7 @@ Resources:
       Handler: s3dataeventstoelasticcloud.lambda_handler
       Runtime: python3.7
       Tracing: Active
-      Timeout: 10
+      Timeout: 30
       Environment: 
         Variables:
             cloud_id: '-'
