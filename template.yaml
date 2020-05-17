@@ -124,6 +124,7 @@ Resources:
                           - "xray:*"
                           - "es:*"
                           - "ssm:*"
+                          - "kms:*"
                     Resource: "*"
           Roles: 
               - Ref: "s3dataeventstoelasticcloudrole"
