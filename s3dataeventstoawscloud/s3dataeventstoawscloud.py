@@ -31,7 +31,7 @@ def decode_event(event: dict) -> dict:
 
 def lambda_handler(event, ctx) -> None:
     event = decode_event(event)
-    print(json.dumps(event))
+    # print(json.dumps(event))
 
     logEvents = event['logEvents']
     # print("Log events:\n{}".format(logEvents))
