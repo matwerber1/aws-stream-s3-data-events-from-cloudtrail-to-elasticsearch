@@ -77,31 +77,31 @@ def lambda_handler(event, context):
         if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0:
             parameter = param_details.get('Parameter')
             cloud_id = parameter.get('Value')
-            log.info('cloud_id=' + cloud_id)
+            # log.info('cloud_id=' + cloud_id)
 
         param_name = '/' + parent_stack_name + '/http_auth_username'
         param_details = client.get_parameter(Name=param_name,WithDecryption=True)
         if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0:
             parameter = param_details.get('Parameter')
             http_auth_username = parameter.get('Value')
-            log.info('http_auth_username=' + http_auth_username)
+            # log.info('http_auth_username=' + http_auth_username)
         
         param_name = '/' + parent_stack_name + '/http_auth_password'
         param_details = client.get_parameter(Name=param_name,WithDecryption=True)
         if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0:
             parameter = param_details.get('Parameter')
             http_auth_password = parameter.get('Value')
-            log.info('http_auth_password=' + http_auth_password)
+            # log.info('http_auth_password=' + http_auth_password)
 
         param_name = '/' + parent_stack_name + '/index_name'
         param_details = client.get_parameter(Name=param_name,WithDecryption=True)
         if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0:
             parameter = param_details.get('Parameter')
             index_name = parameter.get('Value')
-            log.info('index_name=' + index_name)
+            # log.info('index_name=' + index_name)
 
     except:
-        log.debug("Encountered an error loading credentials from SSM.")
+        # log.debug("Encountered an error loading credentials from SSM.")
         traceback.print_exc()
         cloud_id = os.getenv('cloud_id')
         http_auth_username = os.getenv('http_auth_username')
