@@ -32,6 +32,7 @@ Resources:
   s3dataeventstoawscloud:
     Type: AWS::Serverless::Function # More info about Function Resource:
     Properties:
+      Role: !GetAtt s3dataeventstoawscloudrole.Arn
       CodeUri: s3dataeventstoawscloud
       Handler: s3dataeventstoawscloud.lambda_handler
       Runtime: python3.7
@@ -82,6 +83,7 @@ Resources:
   s3dataeventstoelasticcloud:
     Type: AWS::Serverless::Function # More info about Function Resource:
     Properties:
+      Role: !GetAtt s3dataeventstoelasticcloudrole.Arn
       CodeUri: s3dataeventstoelasticcloud
       Handler: s3dataeventstoelasticcloud.lambda_handler
       Runtime: python3.7
@@ -144,12 +146,12 @@ Resources:
                   labmdafunction2: !GetAtt s3dataeventstoelasticcloud.Arn
                   AWS_XRAY_TRACING_NAME: 'invokeonnotification'
                   enable_logging: 'True'
-      Events:
-        S3CloudTrailLogsEvent: 
-          Type: CloudWatchLogs
-          Properties: 
-            FilterPattern: ""
-            LogGroupName: !Ref LogGroup
+          Events:
+            S3CloudTrailLogsEvent: 
+              Type: CloudWatchLogs
+              Properties: 
+                FilterPattern: ""
+                LogGroupName: !Ref LogGroup
 
   invokeonnotificationrole:
       Type: AWS::IAM::Role

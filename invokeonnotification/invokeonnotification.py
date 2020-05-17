@@ -23,18 +23,20 @@ def lambda_handler(event, context):
     ######################################################################
     log = logging.getLogger("invokeonnotification-Logger")
     # log.setLevel(logging.DEBUG)
-    logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    # logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
     # log.addHandler(handler)
     enable_logging = os.getenv('enable_logging')
-    if enable_logging == 'True':
-        enable_logging = True
-        logging.Logger.disabled = False
-    else: 
-        enable_logging = False
-        logging.Logger.disabled = True
+    # if enable_logging == 'True':
+    #     enable_logging = True
+    #     logging.Logger.disabled = False
+    # else: 
+    #     enable_logging = False
+    #     logging.Logger.disabled = True
 
     try:
-        log.info("Received event: " + json.dumps(event, indent=2))
+        print("Received event: ")
+        print(json.dumps(event, indent=2))
+        # log.info("Received event: " + json.dumps(event, indent=2))
         lambda_client = boto3.client('lambda')
         labmdafunction1 = os.getenv('labmdafunction1')
         labmdafunction2 = os.getenv('labmdafunction2')
@@ -67,7 +69,7 @@ def lambda_handler(event, context):
     subsegment.put_annotation("Developer", "Adrian")
     subsegment.put_annotation("lambdafunction", "invokeonnotification")
     subsegment.put_metadata("function", __name__)
-    subsegment.put_metadata("enable_logging", enable_logging)
+    # subsegment.put_metadata("enable_logging", enable_logging)
     subsegment.put_metadata("system time H:M:S.milliseconds", time_now)
     # subsegment.set_user("invokeonnotification")
 

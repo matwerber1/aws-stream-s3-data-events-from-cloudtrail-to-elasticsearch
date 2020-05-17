@@ -2,7 +2,7 @@ from __future__ import print_function
 import json
 import urllib.parse
 import boto3
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, RequestsHttpConnection
 import requests
 from datetime import datetime
 from s3logparse import s3logparse
@@ -31,34 +31,22 @@ from requests_aws4auth import AWS4Auth
 
 print('Loading function')
 
-
+##################################################################################################
 # Initialize boto3 client at global scope for connection reuse
+#  Get environment variables for reuse
+##################################################################################################
 client = boto3.client('ssm')
 s3 = boto3.client('s3')
 
-
-
-
-# awsauth = AWS4Auth(AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION, 'es', session_token=AWS_SESSION_TOKEN)
 host = os.environ.get('ES_ENDPOINT')
 index = os.environ.get('ES_INDEX')
 region = os.environ.get('ES_REGION')
 
-service = 'es'
-credentials = boto3.Session().get_credentials()
-awsauth = AWS4Auth(credentials.access_key, credentials.secret_key, region, service, session_token=credentials.token)
-HOSTS=[{'host': host, 'port': 443}]
-elastic_client = Elasticsearch(
-    hosts=HOSTS,
-    http_auth=awsauth,
-    use_ssl=True,
-    verify_certs=True,
-    connection_class=RequestsHttpConnection
-)
 
 
-
-
+##################################################################################################
+# Helper functions to process incoming decoded and compressed event from CloudWatch Logs
+##################################################################################################
 def decompress(data) -> bytes:
     return gzip.decompress(data)
 
@@ -70,21 +58,66 @@ def decode_event(event: dict) -> dict:
     return decode_record(event['awslogs'])
 
 
-
+##################################################################################################
+# AWS Lambda hander invoked first
+##################################################################################################
 def lambda_handler(event, context):
     print("Received event: " + json.dumps(event, indent=2))
 
 
 
-##################################################################################################
+    ######################################################################
+    # Get all parameters containing credentials for this app
+    #   If not -> user credentials from environment variables
+    ######################################################################
+    parent_stack_name = os.getenv('parent_stack_name')
+    try:
+        param_name = '/' + parent_stack_name + '/cloud_id'
+        param_details = client.get_parameter(Name=param_name,WithDecryption=True)
+        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0:
+            parameter = param_details.get('Parameter')
+            cloud_id = parameter.get('Value')
+            log.info('cloud_id=' + cloud_id)
+
+        param_name = '/' + parent_stack_name + '/http_auth_username'
+        param_details = client.get_parameter(Name=param_name,WithDecryption=True)
+        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0:
+            parameter = param_details.get('Parameter')
+            http_auth_username = parameter.get('Value')
+            log.info('http_auth_username=' + http_auth_username)
+        
+        param_name = '/' + parent_stack_name + '/http_auth_password'
+        param_details = client.get_parameter(Name=param_name,WithDecryption=True)
+        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0:
+            parameter = param_details.get('Parameter')
+            http_auth_password = parameter.get('Value')
+            log.info('http_auth_password=' + http_auth_password)
+
+        param_name = '/' + parent_stack_name + '/index_name'
+        param_details = client.get_parameter(Name=param_name,WithDecryption=True)
+        if 'Parameter' in param_details and len(param_details.get('Parameter')) > 0:
+            parameter = param_details.get('Parameter')
+            index_name = parameter.get('Value')
+            log.info('index_name=' + index_name)
+
+    except:
+        log.debug("Encountered an error loading credentials from SSM.")
+        traceback.print_exc()
+        cloud_id = os.getenv('cloud_id')
+        http_auth_username = os.getenv('http_auth_username')
+        http_auth_password = os.getenv('http_auth_password')
+        index_name = os.getenv('index_name')
+        
+
+    ##################################################################################################
     #Now put that data in ElasticCloud! 
-##################################################################################################
-    es = elastic_client
-    # es = Elasticsearch(cloud_id=cloud_id_var, http_auth=(http_auth_username,http_auth_password))
+    ##################################################################################################
+    # es = elastic_client
+    es = Elasticsearch(cloud_id=cloud_id, http_auth=(http_auth_username, http_auth_password))
     es.info()
 
     # create an index in elasticsearch, ignore status code 400 (index already exists)
-    es.indices.create(index='access-logs', ignore=400)
+    es.indices.create(index=index_name, ignore=400)
     # {'acknowledged': True, 'shards_acknowledged': True, 'index': 'my-index'}
     # datetimes will be serialized
     # es.index(index="my-index", id=44, body={"any": "data44", "timestamp": datetime.now()})
