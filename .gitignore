@@ -130,3 +130,6 @@ $RECYCLE.BIN/
 
 
 # End of https://www.gitignore.io/api/osx,node,linux,windows
+aws-stream-s3-data-events-from-cloudtrail-to-elasticsearch.code-workspace
+samconfig.toml
+invokeonnotification/test.py
