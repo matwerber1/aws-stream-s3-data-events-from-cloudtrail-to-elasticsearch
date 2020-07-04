@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Transform: AWS::Serverless-2016-10-31
+Transform: 'AWS::Serverless-2016-10-31'
 Description: >
   Stream S3 data access logs from CloudTrail 
   to CloudWatch Logs to Lambda to ElasticSearch.
@@ -10,10 +10,6 @@ Globals:
     Timeout: 60
 
 Parameters:
-  EsIndex:
-    Type: String
-    Default: "cloudwatch-logs"
-
   EsDocType: 
     Type: String
     Default: s3-log
@@ -21,42 +17,175 @@ Parameters:
   # Full HTTPS URL of your Elasticsearch cluster
   EsEndpoint: 
     Type: String
+    Default: 'https://example.us-west-2.es.amazonaws.com'
 
   # Name of your Elasticsearch cluster as it appears in the AWS console
   EsDomainName:
     Type: String
 
+  
 Resources:
   
-  PublishToElasticSearchFunction:
+####################################################################################################################################################################################################################################################################################################################################################################################################
+# s3dataeventstoawscloud
+####################################################################################################################################################################################################################################################################################################################################################################################################
+  s3dataeventstoawscloud:
     Type: AWS::Serverless::Function # More info about Function Resource:
     Properties:
-      CodeUri: lambda/publish-to-elasticsearch
-      Handler: app.handler
+      Role: !GetAtt s3dataeventstoawscloudrole.Arn
+      CodeUri: s3dataeventstoawscloud
+      Handler: s3dataeventstoawscloud.lambda_handler
       Runtime: python3.7
+      Tracing: Active
+      Timeout: 30
       Environment: 
         Variables: 
           ES_ENDPOINT: !Ref EsEndpoint
           ES_REGION: !Sub "${AWS::Region}"
-          ES_INDEX: !Ref EsIndex
           ES_DOC_TYPE: !Ref EsDocType
-      Events:
-        S3CloudTrailLogsEvent: 
-          Type: CloudWatchLogs
-          Properties: 
-            FilterPattern: ""
-            LogGroupName: !Ref LogGroup
-      Policies:
-        - AWSLambdaVPCAccessExecutionRole
-        - ElasticsearchHttpPostPolicy:
-            DomainName: !Ref EsDomainName
-      VpcConfig:
-        SecurityGroupIds: 
-          - 'sg-00e88c6dc027cc7ce'
-        SubnetIds: 
-          - 'subnet-014bb42f'
-          - 'subnet-d3c33e8f'
+          AWS_XRAY_TRACING_NAME: 's3dataeventstoawscloud'
+          # host: 'example.us-west-2.es.amazonaws.com'
+          index_name: 's3dataeventstoawscloud'
+          enable_logging: 'True'
 
+  s3dataeventstoawscloudrole:
+      Type: AWS::IAM::Role
+      Properties:
+          AssumeRolePolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                  - Action: ['sts:AssumeRole']
+                    Effect: Allow
+                    Principal:
+                      Service: [lambda.amazonaws.com]
+
+  s3dataeventstoawscloudpolicy: 
+      Type: "AWS::IAM::Policy"
+      Properties: 
+          PolicyName: !Sub "${AWS::StackName}-s3dataeventstoawscloudpolicy"
+          PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                  - Effect: "Allow"
+                    Action: 
+                          - "s3:*"
+                          - "logs:*"
+                          - "xray:*"
+                          - "es:*"
+                    Resource: "*"
+          Roles: 
+              - Ref: "s3dataeventstoawscloudrole"
+
+
+####################################################################################################################################################################################################################################################################################################################################################################################################
+# s3dataeventstoelasticcloud
+####################################################################################################################################################################################################################################################################################################################################################################################################
+  s3dataeventstoelasticcloud:
+    Type: AWS::Serverless::Function # More info about Function Resource:
+    Properties:
+      Role: !GetAtt s3dataeventstoelasticcloudrole.Arn
+      CodeUri: s3dataeventstoelasticcloud
+      Handler: s3dataeventstoelasticcloud.lambda_handler
+      Runtime: python3.7
+      Tracing: Active
+      Timeout: 30
+      Environment: 
+        Variables:
+            cloud_id: '-'
+            http_auth_username: 'elastic'
+            http_auth_password: '-'
+            index_name: 's3dataeventstoelasticcloud'
+            AWS_XRAY_TRACING_NAME: 'accesslogstoelasticcloud'
+            enable_logging: 'True'
+            parent_stack_name: !Sub '${AWS::StackName}'          
+
+  s3dataeventstoelasticcloudrole:
+      Type: AWS::IAM::Role
+      Properties:
+          AssumeRolePolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                  - Action: ['sts:AssumeRole']
+                    Effect: Allow
+                    Principal:
+                      Service: [lambda.amazonaws.com]
+
+  s3dataeventstoelasticcloudpolicy: 
+      Type: "AWS::IAM::Policy"
+      Properties: 
+          PolicyName: !Sub "${AWS::StackName}-s3dataeventstoelasticcloudpolicy"
+          PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                  - Effect: "Allow"
+                    Action: 
+                          - "s3:*"
+                          - "logs:*"
+                          - "xray:*"
+                          - "es:*"
+                          - "ssm:*"
+                          - "kms:*"
+                    Resource: "*"
+          Roles: 
+              - Ref: "s3dataeventstoelasticcloudrole"
+
+
+####################################################################################################################################################################################################################################################################################################################################################################################################
+# invokeonnotification
+####################################################################################################################################################################################################################################################################################################################################################################################################
+  invokeonnotification:
+      Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+      Properties:
+          Role: !GetAtt invokeonnotificationrole.Arn
+          CodeUri: invokeonnotification/
+          Handler: invokeonnotification.lambda_handler
+          Runtime: python3.7
+          Tracing: Active
+          Timeout: 10
+          Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+              Variables:
+                  labmdafunction1: !GetAtt s3dataeventstoawscloud.Arn
+                  labmdafunction2: !GetAtt s3dataeventstoelasticcloud.Arn
+                  AWS_XRAY_TRACING_NAME: 'invokeonnotification'
+                  enable_logging: 'True'
+          Events:
+            S3CloudTrailLogsEvent: 
+              Type: CloudWatchLogs
+              Properties: 
+                FilterPattern: ""
+                LogGroupName: !Ref LogGroup
+
+  invokeonnotificationrole:
+      Type: AWS::IAM::Role
+      Properties:
+          AssumeRolePolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                  - Action: ['sts:AssumeRole']
+                    Effect: Allow
+                    Principal:
+                      Service: [lambda.amazonaws.com]
+
+  invokeonnotificationpolicy: 
+      Type: "AWS::IAM::Policy"
+      Properties: 
+          PolicyName: !Sub "${AWS::StackName}-invokeonnotificationpolicy"
+          PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                  - Effect: "Allow"
+                    Action: 
+                          - "lambda:*"
+                          - "logs:*"
+                          - "xray:*"
+                    Resource: "*"
+          Roles: 
+              - Ref: "invokeonnotificationrole"
+
+
+####################################################################################################################################################################################################################################################################################################################################################################################################
+# S3Bucket for CloudTrail log storage
+####################################################################################################################################################################################################################################################################################################################################################################################################
   S3Bucket: 
     Type: AWS::S3::Bucket
 
@@ -98,12 +227,13 @@ Resources:
     Type: AWS::CloudTrail::Trail
     DependsOn: 
       - BucketPolicy
+      - CloudTrailRolePolicy
     Properties: 
       S3BucketName: 
         Ref: S3Bucket
-      IncludeGlobalServiceEvents: false
+      IncludeGlobalServiceEvents: true
       IsLogging: true
-      IsMultiRegionTrail: false
+      IsMultiRegionTrail: true
       CloudWatchLogsLogGroupArn: !GetAtt LogGroup.Arn
       CloudWatchLogsRoleArn: !GetAtt CloudTrailRole.Arn
       EventSelectors:
@@ -113,7 +243,7 @@ Resources:
               Type: "AWS::S3::Object"
               Values: 
                 - "arn:aws:s3:::"
-          IncludeManagementEvents: false
+          IncludeManagementEvents: true
   
   CloudTrailRole: 
     Type: "AWS::IAM::Role"
@@ -142,7 +272,7 @@ Resources:
             Action: 
               - "logs:CreateLogStream"
               - "logs:PutLogEvents"
-            Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${LogGroup}:log-stream:*"
+            Resource: !GetAtt LogGroup.Arn
       Roles:
         - !Ref CloudTrailRole
 
@@ -180,3 +310,175 @@ Resources:
             Resource: "*"         
       Roles:
         - !Ref CloudWatchRole
+
+
+####################################################################################################################################################################################################################################################################################################################################################################################################
+####################################################################################################################################################################################################################################################################################################################################################################################################
+# KMS Key and Alias and Resources for secure credentials
+####################################################################################################################################################################################################################################################################################################################################################################################################
+####################################################################################################################################################################################################################################################################################################################################################################################################
+  ParameterStoreEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: 'alias/s3dataeventstoelasticcloudEncryptionKey'
+      TargetKeyId: !Ref ParameterStoreEncryptionKey
+
+  ParameterStoreEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'Encryption key for secret config values for S3 Access log Lambda function'
+      Enabled: True
+      EnableKeyRotation: False
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: 'key-default-1'
+        Statement:
+          -
+            Sid: 'Allow administration of the key & encryption of new values'
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:Create*'
+              - 'kms:Encrypt'
+              - 'kms:Describe*'
+              - 'kms:Enable*'
+              - 'kms:List*'
+              - 'kms:Put*'
+              - 'kms:Update*'
+              - 'kms:Revoke*'
+              - 'kms:Disable*'
+              - 'kms:Get*'
+              - 'kms:Delete*'
+              - 'kms:ScheduleKeyDeletion'
+              - 'kms:CancelKeyDeletion'
+            Resource: '*'
+          -
+            Sid: 'Allow use of the key'
+            Effect: Allow
+            Principal:
+              AWS:
+                - !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+
+  customResources:
+    DependsOn: customResourcesLambdaRolePolicy
+    Type: Custom::customresources
+    Properties:
+      ServiceToken: 
+        Fn::GetAtt: 
+          - "customResourcesFunction"
+          - "Arn"
+      parent_stack_name: !Sub '${AWS::StackName}'
+  
+  customResourcesFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      Role: !GetAtt customResourcesLambdaRole.Arn
+      CodeUri: customresources/
+      Handler: customresources.lambda_handler
+      Runtime: python3.7
+      Timeout: 60
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          parent_stack_name: !Sub '${AWS::StackName}'
+          ParameterStoreEncryptionKey: !Sub '${ParameterStoreEncryptionKey}'
+      Description: Create and Delete custom resources Lambda function.
+
+  customResourcesLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: ['sts:AssumeRole']
+            Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+
+  customResourcesLambdaRolePolicy: 
+    DependsOn: ParameterStoreEncryptionKey
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: !Sub "${AWS::StackName}-customResourcesLambdaRolePolicy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+                - "s3:*"
+                - "ssm:*"
+                - "logs:*"
+                - "kms:*"
+            Resource: "*"
+      Roles: 
+        - Ref: "customResourcesLambdaRole"
+
+
+####################################################################################################################################################################################################################################################################################################################################################################################################
+# Cleanup Bucket on Delete Resources
+####################################################################################################################################################################################################################################################################################################################################################################################################
+
+  cleanupBucketOnDelete:
+      DependsOn: cleanupBucketOnDeleteFunction
+      Type: Custom::cleanupbucket
+      Properties:
+          ServiceToken: 
+              Fn::GetAtt: 
+                - "cleanupBucketOnDeleteFunction"
+                - "Arn"
+          BucketName: !Sub '${S3Bucket.Arn}'
+
+  cleanupBucketOnDeleteFunction:
+    DependsOn: S3Bucket
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      Role: !GetAtt cleanupBucketOnDeleteLambdaRole.Arn
+      CodeUri: cleanupBucketOnDelete/
+      Handler: cleanupBucketOnDelete.lambda_handler
+      Runtime: python3.7
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          s3_bucket_name: !Ref S3Bucket
+      Timeout: 300
+      Description: cleanup Bucket on Delete Lambda Lambda function.
+
+  cleanupBucketOnDeleteLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: ['sts:AssumeRole']
+            Effect: Allow
+            Principal:
+              Service: [lambda.amazonaws.com]
+
+  cleanupBucketOnDeleteLambdaRolePolicy: 
+    Type: "AWS::IAM::Policy"
+    Properties: 
+      PolicyName: !Sub "${AWS::StackName}-cleanupBucketOnDeleteLambdaRolePolicy"
+      PolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: "Allow"
+            Action: 
+                - "s3:*"
+                - "logs:*"
+            Resource: "*"
+          - Effect: "Deny"
+            Action: 
+                - "s3:DeleteBucket"
+            Resource: "*"
+      Roles: 
+          - Ref: "cleanupBucketOnDeleteLambdaRole"
+
+
+
